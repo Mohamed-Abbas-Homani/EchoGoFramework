@@ -33,7 +33,7 @@ func InitRoutes() error {
 	userGroup.GET("", handlers.GetUserHandler)
 	userGroup.GET("/:id", handlers.GetUserByIdHandler)
 	userGroup.PUT("/:id", handlers.UpdateUserHandler)
-
+	userGroup.DELETE("/:id", handlers.DeleteUserHandler)
 	return nil
 }
 

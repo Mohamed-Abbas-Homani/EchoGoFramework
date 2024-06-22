@@ -44,10 +44,7 @@ func GetUserByIdHandler(c echo.Context) error {
 	var user models.User
 	res := database.DB.First(&user, id)
 	if res.Error != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Database error")
-	}
-	if res.RowsAffected == 0 {
-		return echo.NewHTTPError(http.StatusBadRequest, "No User Found")
+		return echo.NewHTTPError(http.StatusInternalServerError, "No User Found")
 	}
 
 	// Cache the user data
@@ -67,10 +64,7 @@ func UpdateUserHandler(c echo.Context) error {
 	var user models.User
 	res := database.DB.First(&user, id)
 	if res.Error != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Database error")
-	}
-	if res.RowsAffected == 0 {
-		return echo.NewHTTPError(http.StatusBadRequest, "No User Found")
+		return echo.NewHTTPError(http.StatusInternalServerError, "No User Found")
 	}
 
 	profilePicturePath, err := UploadProfilePicture(c)
@@ -104,5 +98,24 @@ func UpdateUserHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Caching error")
 	}
 
+	return c.JSON(http.StatusOK, types.NewUserDto(&user))
+}
+
+func DeleteUserHandler(c echo.Context) error {
+	id := c.Param("id")
+	var user models.User
+	res := database.DB.First(&user, id)
+	if res.Error != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "No User Found")
+	}
+
+	res = database.DB.Delete(&user)
+	if res.Error != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Database error")
+	}
+
+	if err := cache.Delete(id); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to cache user data")
+	}
 	return c.JSON(http.StatusOK, types.NewUserDto(&user))
 }
