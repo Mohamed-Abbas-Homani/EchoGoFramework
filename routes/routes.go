@@ -32,6 +32,8 @@ func InitRoutes() error {
 	userGroup.Use(echojwt.WithConfig(middlewares.JWTConfig()))
 	userGroup.GET("", handlers.GetUserHandler)
 	userGroup.GET("/:id", handlers.GetUserByIdHandler)
+	userGroup.PUT("/:id", handlers.UpdateUserHandler)
+
 	return nil
 }
 

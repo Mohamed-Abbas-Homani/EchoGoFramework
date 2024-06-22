@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"encoding/json"
-	"log"
+	"golang.org/x/crypto/bcrypt"
 	"myapp/cache"
 	"myapp/database"
 	"myapp/models"
+	"myapp/types"
 	"net/http"
 	"time"
 
@@ -23,22 +23,21 @@ func GetUserHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "No Users Found")
 	}
 
-	return c.JSON(http.StatusOK, users)
+	usersDto := make([]types.UserDto, len(users))
+	for index, user := range users {
+		usersDto[index] = types.NewUserDto(&user)
+	}
+	return c.JSON(http.StatusOK, usersDto)
 }
 
 func GetUserByIdHandler(c echo.Context) error {
 	id := c.Param("id")
 
 	// Check if user is in the cache
-	cachedUser, err := cache.Get(id)
-	if err == nil && cachedUser != "" {
-		var user models.User
-		err := json.Unmarshal([]byte(cachedUser), &user)
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "Failed to parse cached user")
-		}
-		log.Println("served from cache")
-		return c.JSON(http.StatusOK, user)
+	var cachedUser models.User
+	err := cache.Get(id, &cachedUser)
+	if err == nil {
+		return c.JSON(http.StatusOK, cachedUser)
 	}
 
 	// User not in cache, query the database
@@ -50,16 +49,49 @@ func GetUserByIdHandler(c echo.Context) error {
 	if res.RowsAffected == 0 {
 		return echo.NewHTTPError(http.StatusBadRequest, "No User Found")
 	}
-	log.Println("served from database")
 
 	// Cache the user data
-	userJSON, err := json.Marshal(user)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to marshal user")
+	if err := cache.Set(id, user, 10*time.Minute); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to cache user data")
 	}
-	if err := cache.Set(id, userJSON, 10*time.Minute); err != nil {
+
+	return c.JSON(http.StatusOK, types.NewUserDto(&user))
+}
+
+func UpdateUserHandler(c echo.Context) error {
+	id := c.Param("id")
+	username := c.FormValue("username")
+	email := c.FormValue("email")
+	password := c.FormValue("password")
+	newPassword := c.FormValue("newPassword")
+	var user models.User
+	res := database.DB.First(&user, id)
+	if res.Error != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Database error")
+	}
+	if res.RowsAffected == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "No User Found")
+	}
+
+	profilePicturePath, err := UploadProfilePicture(c)
+	if err != nil {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, user)
+	// Compare the provided password with the stored hashed password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return echo.ErrUnauthorized
+	}
+
+	user.Username = username
+	user.Email = email
+	user.Password = newPassword
+	user.ProfilePicture = profilePicturePath
+
+	res = database.DB.Save(&user)
+	if res.Error != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Database error")
+	}
+
+	return c.JSON(http.StatusOK, types.NewUserDto(&user))
 }

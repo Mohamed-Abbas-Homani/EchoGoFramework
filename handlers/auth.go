@@ -3,9 +3,6 @@ package handlers
 import (
 	"errors"
 	"fmt"
-	"io"
-	"log"
-	"mime/multipart"
 	"myapp/database"
 	"myapp/models"
 	"net/http"
@@ -20,12 +17,9 @@ import (
 
 func SignUpHandler(c echo.Context) error {
 	// Parse form values
+	username := c.FormValue("username")
 	email := c.FormValue("email")
 	password := c.FormValue("password")
-	avatar, err := c.FormFile("profilePicture")
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid file")
-	}
 
 	// Check if the email already exists in the database
 	var existingUser models.User
@@ -33,33 +27,9 @@ func SignUpHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusConflict, "Email already exists")
 	}
 
-	// Open the uploaded file
-	src, err := avatar.Open()
+	profilePicturePath, err := UploadProfilePicture(c)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to open file")
-	}
-	defer func(src multipart.File) {
-		err := src.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(src)
-
-	// Create destination file
-	dst, err := os.Create("uploads/" + avatar.Filename)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create file")
-	}
-	defer func(dst *os.File) {
-		err := dst.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(dst)
-
-	// Copy file content to destination
-	if _, err := io.Copy(dst, src); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to save file")
+		return err
 	}
 
 	// Hash the password
@@ -70,9 +40,10 @@ func SignUpHandler(c echo.Context) error {
 
 	// Create user object
 	user := models.User{
+		Username:       username,
 		Email:          email,
 		Password:       string(hashedPassword),
-		ProfilePicture: "uploads/" + avatar.Filename,
+		ProfilePicture: profilePicturePath,
 	}
 
 	// Save user to database
@@ -81,7 +52,7 @@ func SignUpHandler(c echo.Context) error {
 	}
 
 	// Return success response
-	return c.JSON(http.StatusOK, map[string]string{
+	return c.JSON(http.StatusCreated, echo.Map{
 		"message": "User created successfully",
 		"userId":  fmt.Sprint(user.ID),
 	})
