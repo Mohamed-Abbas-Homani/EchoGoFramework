@@ -37,7 +37,7 @@ func GetUserByIdHandler(c echo.Context) error {
 	var cachedUser models.User
 	err := cache.Get(id, &cachedUser)
 	if err == nil {
-		return c.JSON(http.StatusOK, cachedUser)
+		return c.JSON(http.StatusOK, types.NewUserDto(&cachedUser))
 	}
 
 	// User not in cache, query the database
@@ -83,14 +83,25 @@ func UpdateUserHandler(c echo.Context) error {
 		return echo.ErrUnauthorized
 	}
 
+	// Hash the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to hash password")
+	}
+
 	user.Username = username
 	user.Email = email
-	user.Password = newPassword
+	user.Password = string(hashedPassword)
 	user.ProfilePicture = profilePicturePath
 
 	res = database.DB.Save(&user)
 	if res.Error != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Database error")
+	}
+
+	err = cache.Set(id, user, 10*time.Minute)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "Caching error")
 	}
 
 	return c.JSON(http.StatusOK, types.NewUserDto(&user))

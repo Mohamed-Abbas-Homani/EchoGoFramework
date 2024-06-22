@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v8"
-	"log"
 	"os"
 	"strconv"
 	"time"
@@ -37,8 +36,6 @@ func InitCache() error {
 	if err != nil {
 		return fmt.Errorf("could not connect to Redis: %v", err)
 	}
-
-	log.Println("Connected to Redis")
 	return nil
 }
 

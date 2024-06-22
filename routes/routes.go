@@ -24,7 +24,7 @@ func InitRoutes() error {
 
 	// Auth Routes
 	authGroup := router.Group("/auth")
-	authGroup.POST("/singup", handlers.SignUpHandler)
+	authGroup.POST("/signup", handlers.SignUpHandler)
 	authGroup.POST("/login", handlers.LoginHandler)
 
 	// User Routes
