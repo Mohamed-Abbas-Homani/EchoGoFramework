@@ -22,6 +22,12 @@ func InitDataBase() (err error) {
 	// Build DSN (Data Source Name)
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable", host, user, password, dbName, port)
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	DB.AutoMigrate(&models.User{})
+	if err != nil {
+		return
+	}
+	if err = DB.AutoMigrate(&models.User{}); err != nil {
+		return
+	}
+
 	return
 }

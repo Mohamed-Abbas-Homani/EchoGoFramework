@@ -12,16 +12,25 @@ import (
 var router *echo.Echo
 
 func InitRoutes() error {
+	//Router
 	router = echo.New()
+
+	// Global middlewares
 	router.Use(middleware.Logger())
 	router.Use(middleware.Recover())
+
+	// Home Route
 	router.GET("/", handlers.HomeHandler)
+
+	// Auth Routes
 	authGroup := router.Group("/auth")
 	authGroup.POST("/singup", handlers.SignUpHandler)
 	authGroup.POST("/login", handlers.LoginHandler)
+
+	// User Routes
 	userGroup := router.Group("/user")
 	userGroup.Use(echojwt.WithConfig(middlewares.JWTConfig()))
-    userGroup.GET("", handlers.GetUserHandler)
+	userGroup.GET("", handlers.GetUserHandler)
 	return nil
 }
 

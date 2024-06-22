@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"log"
+	"mime/multipart"
 	"myapp/database"
 	"myapp/models"
 	"net/http"
@@ -35,14 +38,24 @@ func SignUpHandler(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to open file")
 	}
-	defer src.Close()
+	defer func(src multipart.File) {
+		err := src.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(src)
 
 	// Create destination file
 	dst, err := os.Create("uploads/" + avatar.Filename)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create file")
 	}
-	defer dst.Close()
+	defer func(dst *os.File) {
+		err := dst.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(dst)
 
 	// Copy file content to destination
 	if _, err := io.Copy(dst, src); err != nil {
@@ -74,7 +87,7 @@ func SignUpHandler(c echo.Context) error {
 	})
 }
 
-// jwtCustomClaims are custom claims extending default ones.
+// JwtCustomClaims are custom claims extending default ones.
 type JwtCustomClaims struct {
 	UserId uint   `json:"userId"`
 	Email  string `json:"email"`
@@ -88,7 +101,7 @@ func LoginHandler(c echo.Context) error {
 	// Check if the email exists in the database
 	var user models.User
 	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return echo.ErrUnauthorized
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "Database error")
