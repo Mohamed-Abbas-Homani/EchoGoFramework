@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"myapp/cache"
 	"myapp/database"
 	"myapp/routes"
 
@@ -19,6 +20,11 @@ func init() {
 		log.Fatal(err)
 	}
 	log.Println("DataBase Connected Successfully.")
+	err = cache.InitCache()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Cache Connected Successfully.")
 	err = routes.InitRoutes()
 	if err != nil {
 		log.Fatal(err)
