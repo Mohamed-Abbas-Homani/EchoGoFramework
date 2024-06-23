@@ -13,8 +13,8 @@ import (
 )
 
 func GetUserHandler(c echo.Context) error {
-	var users []models.User
-	res := database.DB.Find(&users)
+	var users []types.UserDto
+	res := database.DB.Model(models.User{}).Find(&users)
 	if res.Error != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Database error")
 	}
@@ -23,26 +23,21 @@ func GetUserHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "No Users Found")
 	}
 
-	usersDto := make([]types.UserDto, len(users))
-	for index, user := range users {
-		usersDto[index] = types.NewUserDto(&user)
-	}
-	return c.JSON(http.StatusOK, usersDto)
+	return c.JSON(http.StatusOK, users)
 }
 
 func GetUserByIdHandler(c echo.Context) error {
 	id := c.Param("id")
 
 	// Check if user is in the cache
-	var cachedUser models.User
-	err := cache.Get(id, &cachedUser)
+	var user types.UserDto
+	err := cache.Get(id, &user)
 	if err == nil {
-		return c.JSON(http.StatusOK, types.NewUserDto(&cachedUser))
+		return c.JSON(http.StatusOK, user)
 	}
 
 	// User not in cache, query the database
-	var user models.User
-	res := database.DB.First(&user, id)
+	res := database.DB.Model(models.User{}).First(&user, id)
 	if res.Error != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "No User Found")
 	}
@@ -52,15 +47,20 @@ func GetUserByIdHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to cache user data")
 	}
 
-	return c.JSON(http.StatusOK, types.NewUserDto(&user))
+	return c.JSON(http.StatusOK, user)
 }
 
 func UpdateUserHandler(c echo.Context) error {
 	id := c.Param("id")
-	username := c.FormValue("username")
-	email := c.FormValue("email")
-	password := c.FormValue("password")
-	newPassword := c.FormValue("newPassword")
+	var payload types.UpdateUserPayload
+	if err := c.Bind(&payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	if err := c.Validate(&payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
 	var user models.User
 	res := database.DB.First(&user, id)
 	if res.Error != nil {
@@ -73,18 +73,18 @@ func UpdateUserHandler(c echo.Context) error {
 	}
 
 	// Compare the provided password with the stored hashed password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(payload.Password)); err != nil {
 		return echo.ErrUnauthorized
 	}
 
 	// Hash the password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(payload.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to hash password")
 	}
 
-	user.Username = username
-	user.Email = email
+	user.Username = payload.Username
+	user.Email = payload.Email
 	user.Password = string(hashedPassword)
 	user.ProfilePicture = profilePicturePath
 

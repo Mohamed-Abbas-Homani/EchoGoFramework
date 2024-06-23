@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"myapp/database"
 	"myapp/models"
+	"myapp/types"
 	"net/http"
 	"os"
 	"time"
@@ -17,13 +18,18 @@ import (
 
 func SignUpHandler(c echo.Context) error {
 	// Parse form values
-	username := c.FormValue("username")
-	email := c.FormValue("email")
-	password := c.FormValue("password")
+	var payload types.SignupPayload
+	if err := c.Bind(&payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	if err := c.Validate(payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
 
 	// Check if the email already exists in the database
 	var existingUser models.User
-	if err := database.DB.Where("email = ?", email).First(&existingUser).Error; err == nil {
+	if err := database.DB.Where("email = ?", payload.Email).First(&existingUser).Error; err == nil {
 		return echo.NewHTTPError(http.StatusConflict, "Email already exists")
 	}
 
@@ -33,15 +39,15 @@ func SignUpHandler(c echo.Context) error {
 	}
 
 	// Hash the password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to hash password")
 	}
 
 	// Create user object
 	user := models.User{
-		Username:       username,
-		Email:          email,
+		Username:       payload.Username,
+		Email:          payload.Email,
 		Password:       string(hashedPassword),
 		ProfilePicture: profilePicturePath,
 	}
@@ -58,20 +64,19 @@ func SignUpHandler(c echo.Context) error {
 	})
 }
 
-// JwtCustomClaims are custom claims extending default ones.
-type JwtCustomClaims struct {
-	UserId uint   `json:"userId"`
-	Email  string `json:"email"`
-	jwt.RegisteredClaims
-}
-
 func LoginHandler(c echo.Context) error {
-	email := c.FormValue("email")
-	password := c.FormValue("password")
+	var payload types.LoginPayload
+	if err := c.Bind(&payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	if err := c.Validate(&payload); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
 
 	// Check if the email exists in the database
 	var user models.User
-	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
+	if err := database.DB.Where("email = ?", payload.Email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return echo.ErrUnauthorized
 		}
@@ -79,12 +84,12 @@ func LoginHandler(c echo.Context) error {
 	}
 
 	// Compare the provided password with the stored hashed password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(payload.Password)); err != nil {
 		return echo.ErrUnauthorized
 	}
 
 	// Set custom claims
-	claims := &JwtCustomClaims{
+	claims := &types.JwtCustomClaims{
 		UserId: user.ID,
 		Email:  user.Email,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -100,11 +105,12 @@ func LoginHandler(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	cookie := new(http.Cookie)
-	cookie.Name = "access_token"
-	cookie.Value = t
-	cookie.Expires = time.Now().Add(24 * time.Hour)
-	c.SetCookie(cookie)
+
+	c.SetCookie(&http.Cookie{
+		Name:    "access_token",
+		Value:   t,
+		Expires: time.Now().Add(24 * time.Hour),
+	})
 
 	return c.JSON(http.StatusOK, echo.Map{
 		"token": t,

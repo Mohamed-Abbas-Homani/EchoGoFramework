@@ -1,8 +1,10 @@
 package routes
 
 import (
+	"github.com/go-playground/validator"
 	"myapp/handlers"
 	"myapp/middlewares"
+	"myapp/validation"
 
 	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
@@ -14,6 +16,9 @@ var router *echo.Echo
 func InitRoutes() error {
 	//Router
 	router = echo.New()
+
+	// Use Validator
+	router.Validator = &validation.Validator{Validator: validator.New()}
 
 	// Global middlewares
 	router.Use(middleware.Logger())
