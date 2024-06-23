@@ -6,6 +6,7 @@ import (
 	"myapp/middlewares"
 	"myapp/validation"
 
+	"github.com/labstack/echo-contrib/echoprometheus"
 	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -23,9 +24,12 @@ func InitRoutes() error {
 	// Global middlewares
 	router.Use(middleware.Logger())
 	router.Use(middleware.Recover())
+	router.Use(middleware.CORS())
+	router.Use(echoprometheus.NewMiddleware("myapp"))
 
 	// Home Route
 	router.GET("/", handlers.HomeHandler)
+	router.GET("/metrics", echoprometheus.NewHandler())
 
 	// Auth Routes
 	authGroup := router.Group("/auth")
